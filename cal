@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>処方計算ツール</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f7f9; padding: 15px; margin: 0; color: #333; }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 340px; margin: auto; }
+        h2 { font-size: 1.1rem; margin: 0 0 12px 0; text-align: center; color: #007aff; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+        label { font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 5px; color: #555; }
+        input { width: 100%; padding: 10px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 1.1rem; }
+        .btn-section { margin-bottom: 15px; }
+        .btn-label { font-size: 0.75rem; color: #888; margin-bottom: 4px; display: block; }
+        .btn-group { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+        .btn-small { padding: 10px 0; background: #fff; border: 1px solid #007aff; color: #007aff; border-radius: 6px; font-size: 0.9rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-small:active { background: #007aff; color: #fff; }
+        .result-box { margin-top: 15px; padding: 12px; border-radius: 10px; background: #eefbff; border: 1px solid #baddff; }
+        .res-item { margin-bottom: 12px; }
+        .res-item:last-child { margin-bottom: 0; }
+        .res-label { font-size: 0.8rem; color: #666; display: block; margin-bottom: 2px; }
+        .res-date { font-weight: bold; font-size: 1.1rem; display: block; margin-bottom: 8px; }
+        .copy-btn { width: 100%; padding: 12px; background: #007aff; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; }
+        .copy-btn:active { background: #0056b3; }
+        #toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: white; padding: 10px 20px; border-radius: 25px; font-size: 0.85rem; display: none; z-index: 100; }
+    </style>
+</head>
+<body>
+
+<div id="toast">期間をコピーしました</div>
+
+<div class="card">
+    <h2>処方日数計算</h2>
+    
+    <label>起算日（調剤日）</label>
+    <input type="date" id="startDate">
+
+    <div class="btn-section">
+        <span class="btn-label">▼ 7の倍数（週単位）</span>
+        <div class="btn-group">
+            <button class="btn-small" onclick="setDays(7)">7</button>
+            <button class="btn-small" onclick="setDays(14)">14</button>
+            <button class="btn-small" onclick="setDays(21)">21</button>
+            <button class="btn-small" onclick="setDays(28)">28</button>
+            <button class="btn-small" onclick="setDays(35)">35</button>
+            <button class="btn-small" onclick="setDays(42)">42</button>
+            <button class="btn-small" onclick="setDays(49)">49</button>
+            <button class="btn-small" onclick="setDays(56)">56</button>
+        </div>
+
+        <span class="btn-label">▼ 10の倍数</span>
+        <div class="btn-group">
+            <button class="btn-small" onclick="setDays(10)">10</button>
+            <button class="btn-small" onclick="setDays(20)">20</button>
+            <button class="btn-small" onclick="setDays(30)">30</button>
+            <button class="btn-small" onclick="setDays(60)">60</button>
+            <button class="btn-small" onclick="setDays(70)">70</button>
+            <button class="btn-small" onclick="setDays(80)">80</button>
+            <button class="btn-small" onclick="setDays(90)">90</button>
+            <button class="btn-small" onclick="setDays(100)">100</button>
+        </div>
+    </div>
+
+    <label>自由入力（日分）</label>
+    <input type="number" id="days" placeholder="例: 14" oninput="calc()">
+
+    <div class="result-box">
+        <div class="res-item">
+            <span class="res-label">服用期間（コピー用）</span>
+            <span class="res-date" id="periodDisplay">-</span>
+        </div>
+        <div class="res-item">
+            <span class="res-label" style="color:#d93025;">次回予定日</span>
+            <span class="res-date" id="nextDateDisplay" style="color:#d93025;">-</span>
+        </div>
+        <div class="res-item">
+            <span class="res-label" style="color:#1e8e3e;">リフィル受付期間（前後7日）</span>
+            <span class="res-date" id="refillDisplay" style="color:#1e8e3e; font-size: 1.0rem;">-</span>
+        </div>
+        <button class="copy-btn" onclick="copyPeriod()">服用期間をコピー</button>
+    </div>
+</div>
+
+<script>
+    window.onload = () => {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('startDate').value = today;
+        setDays(14);
+    };
+
+    function setDays(n) {
+        document.getElementById('days').value = n;
+        calc();
+    }
+
+    function calc() {
+        const startVal = document.getElementById('startDate').value;
+        const daysVal = parseInt(document.getElementById('days').value);
+        if (!startVal || isNaN(daysVal)) return;
+
+        const start = new Date(startVal);
+        const end = new Date(start);
+        end.setDate(start.getDate() + daysVal - 1);
+        const next = new Date(start);
+        next.setDate(start.getDate() + daysVal);
+
+        const refillStart = new Date(next);
+        refillStart.setDate(next.getDate() - 7);
+        const refillEnd = new Date(next);
+        refillEnd.setDate(next.getDate() + 7);
+
+        const optNext = { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' };
+
+        const startShort = `${start.getMonth() + 1}/${start.getDate()}`;
+        const endShort = `${end.getMonth() + 1}/${end.getDate()}`;
+        const refillStartStr = `${refillStart.getMonth() + 1}/${refillStart.getDate()}`;
+        const refillEndStr = `${refillEnd.getMonth() + 1}/${refillEnd.getDate()}`;
+        
+        // 文字化け対策: 数値文字参照（&#12316;）をHTMLとして挿入
+        // innerTextではなくinnerHTMLを使うことで確実に解決します
+        const wave = "&#12316; "; // 波ダッシュの後に半角スペース
+        
+        document.getElementById('periodDisplay').innerHTML = startShort + wave + endShort;
+        document.getElementById('nextDateDisplay').innerText = next.toLocaleDateString('ja-JP', optNext);
+        document.getElementById('refillDisplay').innerHTML = refillStartStr + wave + refillEndStr;
+    }
+
+    function copyPeriod() {
+        const text = document.getElementById('periodDisplay').innerText;
+        if (!text || text === "-") return;
+
+        navigator.clipboard.writeText(text).then(() => {
+            const toast = document.getElementById('toast');
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 1000);
+        });
+    }
+
+    document.getElementById('startDate').addEventListener('change', calc);
+</script>
+
+</body>
+</html>
